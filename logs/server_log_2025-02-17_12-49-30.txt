@@ -1,0 +1,28 @@
+[2025-02-17 12:49:30] Server started.
+[2025-02-17 12:49:50] admin logged in.
+[2025-02-17 12:49:50] admin connected from ('127.0.0.1', 53549).
+[2025-02-17 12:50:19] admin listed all users.
+[2025-02-17 12:51:14] Jack logged in.
+[2025-02-17 12:51:14] Jack connected from ('127.0.0.1', 58466).
+[2025-02-17 12:51:35] admin: sss
+[2025-02-17 12:51:36] Jack: dd
+[2025-02-17 12:51:39] admin: d
+[2025-02-17 12:51:40] admin: e
+[2025-02-17 12:51:40] admin: d
+[2025-02-17 12:51:43] admin: zef
+[2025-02-17 12:51:45] Jack: de
+[2025-02-17 12:51:49] admin: dzef
+[2025-02-17 12:52:23] admin muted Jack.
+[2025-02-17 12:52:42] admin unmuted Jack.
+[2025-02-17 12:52:47] admin kicked Jack.
+[2025-02-17 12:52:47] Jack logged out.
+[2025-02-17 12:53:00] Jack logged in.
+[2025-02-17 12:53:00] Jack connected from ('127.0.0.1', 52534).
+[2025-02-17 12:53:36] admin: bbzieffz
+[2025-02-17 12:53:48] admin logged out.
+[2025-02-17 12:53:48] admin logged out.
+[2025-02-17 12:54:08] admin logged in.
+[2025-02-17 12:54:08] admin connected from ('127.0.0.1', 59870).
+[2025-02-17 12:55:17] Jack logged out.
+[2025-02-17 12:55:34] admin logged out.
+[2025-02-17 12:55:35] admin logged out.
