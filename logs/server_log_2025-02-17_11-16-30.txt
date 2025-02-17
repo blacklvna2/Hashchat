@@ -1,2 +1,0 @@
-[2025-02-17 11:16:30] Server started.
-[2025-02-17 11:16:47] admin logged in.
