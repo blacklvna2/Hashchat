@@ -1,0 +1,5 @@
+[2025-02-17 11:29:17] Server started.
+[2025-02-17 11:29:57] New user registered: Marie
+[2025-02-17 11:30:46] Marie logged in.
+[2025-02-17 11:30:46] Marie connected from ('127.0.0.1', 51139).
+[2025-02-17 11:32:11] Marie logged out.
