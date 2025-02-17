@@ -17,7 +17,7 @@ import threading
         clients (list):
             Une liste pour suivre toutes les sockets des clients connectés.
     Utilisation:
-        Exécutez ce script pour démarrer le serveur de chat. Le serveur écoute sur toutes les adresses IP disponibles (0.0.0.0) et le port 5555.
+        Exécutez ce script pour démarrer le serveur de chat. Le serveur écoute sur toutes les adresses IP disponibles (127.0.0.1) et le port 5555.
     """
 
 def handle_client(client_socket):
