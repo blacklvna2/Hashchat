@@ -96,6 +96,22 @@ def delete_account(client_socket, username):
         client_socket.send(b"Error deleting account!\n")
         return False
 
+def mute_user(admin, username):
+    """Mute un utilisateur"""
+    if username in connected_users:
+        muted_users.add(username)
+        log_action(f"{admin} muted {username}.")
+        return f"{username} has been muted."
+    return "User not found."
+
+def unmute_user(admin, username):
+    """Unmute un utilisateur"""
+    if username in muted_users:
+        muted_users.remove(username)
+        log_action(f"{admin} unmuted {username}.")
+        return f"{username} has been unmuted."
+    return "User is not muted."
+
 def list_users(client_socket, username):
     """Affiche la liste des utilisateurs (admin seulement)"""
     if username != "admin":
@@ -117,6 +133,10 @@ def send_help(client_socket):
     /changepass     - Changer son mot de passe
     /deleteaccount  - Supprimer son compte
     /listusers      - Lister les utilisateurs (admin seulement)
+    /mute <user>    - Mute un utilisateur (admin)
+    /unmute <user>  - Unmute un utilisateur (admin)
+    /kick <user>    - Expulse un utilisateur (admin)
+    /ban <user>     - Expulse et bannit un utilisateur (admin)
     """
     client_socket.send(commands.encode("utf-8"))
 
