@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+from chat import MessagerieInterface 
 
 def login():
     username = entry_username.get()
@@ -7,6 +8,10 @@ def login():
     
     if username == "admin" and password == "password":
         messagebox.showinfo("Login", "Login Successful")
+        root.destroy()
+        chat = tk.Tk()
+        app = MessagerieInterface(chat)
+        chat.mainloop()
     else:
         messagebox.showerror("Login", "Invalid Username or Password")
 
