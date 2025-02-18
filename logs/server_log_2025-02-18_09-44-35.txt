@@ -1,0 +1,14 @@
+[2025-02-18 09:44:35] Server started.
+[2025-02-18 09:45:42] Jack logged in.
+[2025-02-18 09:45:42] Jack connected from ('127.0.0.1', 51803).
+[2025-02-18 09:45:59] admin logged in.
+[2025-02-18 09:45:59] admin connected from ('127.0.0.1', 51799).
+[2025-02-18 09:46:05] admin banned Jack.
+[2025-02-18 09:46:05] Jack logged out.
+[2025-02-18 09:46:31] admin unbanned Jack.
+[2025-02-18 09:46:40] Jack logged in.
+[2025-02-18 09:46:40] Jack connected from ('127.0.0.1', 51815).
+[2025-02-18 09:46:48] Jack logged out.
+[2025-02-18 09:46:48] Jack logged out.
+[2025-02-18 09:46:52] admin logged out.
+[2025-02-18 09:46:52] admin logged out.

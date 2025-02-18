@@ -1,7 +1,7 @@
 import socket
 import threading
 
-SERVER_IP = "10.2.111.56"
+SERVER_IP = "127.0.0.1"
 SERVER_PORT = 12345
 
 def receive_messages(client_socket):

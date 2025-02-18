@@ -1,0 +1,11 @@
+[2025-02-18 09:47:52] Server started.
+[2025-02-18 09:48:26] admin logged in.
+[2025-02-18 09:48:26] admin connected from ('127.0.0.1', 59545).
+[2025-02-18 09:48:36] Jack logged in.
+[2025-02-18 09:48:36] Jack connected from ('127.0.0.1', 59529).
+[2025-02-18 09:48:50] admin: cdcd
+[2025-02-18 09:48:52] Jack: cfed
+[2025-02-18 09:53:41] Jack logged out.
+[2025-02-18 09:53:41] Jack logged out.
+[2025-02-18 09:53:53] admin logged out.
+[2025-02-18 09:53:53] admin logged out.

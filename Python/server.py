@@ -5,7 +5,7 @@ import os
 import datetime
 
 # Paramètres du serveur
-HOST = '10.2.111.56'
+HOST = '127.0.0.1'
 PORT = 12345
 clients = []  # Liste des (socket, username)
 connected_users = set()  # Liste des utilisateurs connectés
@@ -104,6 +104,7 @@ def send_help(client_socket):
     /unmute <user>  - Unmute un utilisateur (admin)
     /kick <user>    - Expulse un utilisateur (admin)
     /ban <user>     - Expulse et bannit un utilisateur (admin)
+    /unban <user>   - Unban un utilisateur (admin)
     """
     client_socket.send(commands.encode("utf-8"))
 
@@ -191,6 +192,15 @@ def ban_user(client_socket, admin, username):
             return
     client_socket.send(b"User not found or not online.\n")
 
+def unban_user(client_socket, admin, username):
+    """Unban un utilisateur"""
+    if username not in banned_users:
+        client_socket.send(b"User is not banned.\n")
+        return
+    banned_users.remove(username)
+    log_action(f"{admin} unbanned {username}.")
+    client_socket.send(f"{username} has been unbanned.\n".encode("utf-8"))
+
 def whoami(client_socket, username):
     """Affiche le pseudo de l'utilisateur"""
     client_socket.send(f"Your username is {username}\n".encode("utf-8"))
@@ -251,11 +261,17 @@ def handle_client(client_socket, addr):
             elif message.startswith("/ban ") and username == "admin":
                 target = message.split(" ")[1]
                 ban_user(client_socket, username, target)
+            elif message.startswith("/unban ") and username == "admin":
+                target = message.split(" ")[1]
+                unban_user(client_socket, username, target)
             elif message.startswith("/"):
                 client_socket.send(b"Unknown command. Type /help for a list of commands.\n")
             else:
-                log_action(f"{username}: {message}")
-                broadcast_message(f"{username}: {message}", client_socket)
+                if username in muted_users:
+                    client_socket.send(b"You are muted and cannot send messages.\n")
+                else:
+                    log_action(f"{username}: {message}")
+                    broadcast_message(f"{username}: {message}", client_socket)
 
     except Exception as e:
         print(f"Exception: {e}")
