@@ -1,0 +1,13 @@
+[2025-02-18 11:04:32] Server started.
+[2025-02-18 11:04:40] admin logged in.
+[2025-02-18 11:04:40] admin connected from ('127.0.0.1', 60855).
+[2025-02-18 11:04:53] admin: kc
+[2025-02-18 11:05:05] Jack logged in.
+[2025-02-18 11:05:05] Jack connected from ('127.0.0.1', 60859).
+[2025-02-18 11:05:07] Jack: jf
+[2025-02-18 11:05:08] admin: cze
+[2025-02-18 11:05:12] admin muted Jack.
+[2025-02-18 11:05:19] admin unmuted Jack.
+[2025-02-18 11:05:23] admin kicked Jack.
+[2025-02-18 11:05:23] Jack logged out.
+[2025-02-18 11:05:36] admin logged out.

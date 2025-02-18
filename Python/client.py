@@ -2,7 +2,46 @@ import socket
 import threading
 
 SERVER_IP = "127.0.0.1"
-SERVER_PORT = 12345
+SERVER_PORT = 9999
+ENCRYPTION_KEY = "SECRETKEY"
+
+def vigenere_encrypt(plain_text, key):
+    """Chiffre un texte en clair en utilisant le chiffrement de Vigenère"""
+    key = key.upper()
+    cipher_text = []
+    key_index = 0
+
+    for char in plain_text:
+        if char.isalpha():
+            shift = ord(key[key_index]) - ord('A')
+            if char.isupper():
+                cipher_text.append(chr((ord(char) - ord('A') + shift) % 26 + ord('A')))
+            else:
+                cipher_text.append(chr((ord(char) - ord('a') + shift) % 26 + ord('a')))
+            key_index = (key_index + 1) % len(key)
+        else:
+            cipher_text.append(char)
+
+    return ''.join(cipher_text)
+
+def vigenere_decrypt(cipher_text, key):
+    """Déchiffre un texte chiffré en utilisant le chiffrement de Vigenère"""
+    key = key.upper()
+    plain_text = []
+    key_index = 0
+
+    for char in cipher_text:
+        if char.isalpha():
+            shift = ord(key[key_index]) - ord('A')
+            if char.isupper():
+                plain_text.append(chr((ord(char) - ord('A') - shift + 26) % 26 + ord('A')))
+            else:
+                plain_text.append(chr((ord(char) - ord('a') - shift + 26) % 26 + ord('a')))
+            key_index = (key_index + 1) % len(key)
+        else:
+            plain_text.append(char)
+
+    return ''.join(plain_text)
 
 def receive_messages(client_socket):
     """Reçoit et affiche les messages du serveur"""
@@ -10,7 +49,8 @@ def receive_messages(client_socket):
         try:
             message = client_socket.recv(1024).decode("utf-8")
             if message:
-                print("\n" + message)
+                decrypted_message = vigenere_decrypt(message, ENCRYPTION_KEY)
+                print("\n" + decrypted_message)
         except:
             print("[!] Déconnecté du serveur")
             client_socket.close()
@@ -20,11 +60,12 @@ def login_or_register(client_socket):
     """Gère la connexion et l'inscription"""
     while True:
         server_msg = client_socket.recv(1024).decode("utf-8")
-        if "successful" in server_msg:
-            print(server_msg)
+        decrypted_msg = vigenere_decrypt(server_msg, ENCRYPTION_KEY)
+        if "successful" in decrypted_msg:
+            print(decrypted_msg)
             return
-        print(server_msg, end="")
-        client_socket.send(input().encode("utf-8"))
+        print(decrypted_msg, end="")
+        client_socket.send(vigenere_encrypt(input(), ENCRYPTION_KEY).encode("utf-8"))
 
 def start_client():
     """Lance un client"""
@@ -42,10 +83,10 @@ def start_client():
         while True:
             message = input("")
             if message.lower() == "/logout":
-                client_socket.send(b"/logout")
+                client_socket.send(vigenere_encrypt("/logout", ENCRYPTION_KEY).encode("utf-8"))
                 print("[*] Déconnexion en cours... Retour au menu principal.")
                 break
-            client_socket.send(message.encode("utf-8"))
+            client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
 
         client_socket.close()
         print("[*] Déconnecté du serveur. Reconnexion au menu...")

@@ -12,6 +12,8 @@ connected_users = set()  # Liste des utilisateurs connectés
 muted_users = set()  # Liste des utilisateurs mutés
 banned_users = set()  # Liste des utilisateurs bannis
 user_data_file = "users.json"
+# Clé de chiffrement partagée
+ENCRYPTION_KEY = "SECRETKEY"
 
 # Création du dossier logs
 if not os.path.exists("logs"):
@@ -35,50 +37,88 @@ def save_users(users):
     with open(user_data_file, "w") as f:
         json.dump(users, f, indent=4)
 
+def vigenere_encrypt(plain_text, key):
+    """Chiffre un texte en clair en utilisant le chiffrement de Vigenère"""
+    key = key.upper()
+    cipher_text = []
+    key_index = 0
+
+    for char in plain_text:
+        if char.isalpha():
+            shift = ord(key[key_index]) - ord('A')
+            if char.isupper():
+                cipher_text.append(chr((ord(char) - ord('A') + shift) % 26 + ord('A')))
+            else:
+                cipher_text.append(chr((ord(char) - ord('a') + shift) % 26 + ord('a')))
+            key_index = (key_index + 1) % len(key)
+        else:
+            cipher_text.append(char)
+
+    return ''.join(cipher_text)
+
+def vigenere_decrypt(cipher_text, key):
+    """Déchiffre un texte chiffré en utilisant le chiffrement de Vigenère"""
+    key = key.upper()
+    plain_text = []
+    key_index = 0
+
+    for char in cipher_text:
+        if char.isalpha():
+            shift = ord(key[key_index]) - ord('A')
+            if char.isupper():
+                plain_text.append(chr((ord(char) - ord('A') - shift + 26) % 26 + ord('A')))
+            else:
+                plain_text.append(chr((ord(char) - ord('a') - shift + 26) % 26 + ord('a')))
+            key_index = (key_index + 1) % len(key)
+        else:
+            plain_text.append(char)
+
+    return ''.join(plain_text)
+
 def register(client_socket):
     """Gère l'inscription"""
-    client_socket.send(b"Enter username: ")
-    username = client_socket.recv(1024).decode("utf-8").strip()
+    client_socket.send(vigenere_encrypt("Enter username: ", ENCRYPTION_KEY).encode("utf-8"))
+    username = vigenere_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
     
-    client_socket.send(b"Enter password: ")
-    password = client_socket.recv(1024).decode("utf-8").strip()
+    client_socket.send(vigenere_encrypt("Enter password: ", ENCRYPTION_KEY).encode("utf-8"))
+    password = vigenere_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
 
     users = load_users()
     if username in users:
-        client_socket.send(b"Username already exists!\n")
+        client_socket.send(vigenere_encrypt("Username already exists!\n", ENCRYPTION_KEY).encode("utf-8"))
         return None
 
     users[username] = password
     save_users(users)
     log_action(f"New user registered: {username}")
-    client_socket.send(b"Registration successful!\n")
+    client_socket.send(vigenere_encrypt("Registration successful!\n", ENCRYPTION_KEY).encode("utf-8"))
     return None
 
 def login(client_socket):
     """Gère la connexion"""
-    client_socket.send(b"Enter username: ")
-    username = client_socket.recv(1024).decode("utf-8").strip()
+    client_socket.send(vigenere_encrypt("Enter username: ", ENCRYPTION_KEY).encode("utf-8"))
+    username = vigenere_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
     
     if username in banned_users:
-        client_socket.send(b"You are banned from this server!\n")
+        client_socket.send(vigenere_encrypt("You are banned from this server!\n", ENCRYPTION_KEY).encode("utf-8"))
         return None
 
-    client_socket.send(b"Enter password: ")
-    password = client_socket.recv(1024).decode("utf-8").strip()
+    client_socket.send(vigenere_encrypt("Enter password: ", ENCRYPTION_KEY).encode("utf-8"))
+    password = vigenere_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
 
     users = load_users()
     
     if username in connected_users:
-        client_socket.send(b"User already logged in!\n")
+        client_socket.send(vigenere_encrypt("User already logged in!\n", ENCRYPTION_KEY).encode("utf-8"))
         return None
 
     if users.get(username) == password:
-        client_socket.send(b"Login successful!\n")
+        client_socket.send(vigenere_encrypt("Login successful!\n", ENCRYPTION_KEY).encode("utf-8"))
         connected_users.add(username)
         log_action(f"{username} logged in.")
         return username
     else:
-        client_socket.send(b"Invalid credentials!\n")
+        client_socket.send(vigenere_encrypt("Invalid credentials!\n", ENCRYPTION_KEY).encode("utf-8"))
         return None
 
 def logout(client_socket, username):
@@ -106,7 +146,7 @@ def send_help(client_socket):
     /ban <user>     - Expulse et bannit un utilisateur (admin)
     /unban <user>   - Unban un utilisateur (admin)
     """
-    client_socket.send(commands.encode("utf-8"))
+    client_socket.send(vigenere_encrypt(commands, ENCRYPTION_KEY).encode("utf-8"))
 
 def change_password(client_socket, username):
     """Change le mot de passe de l'utilisateur"""
@@ -138,77 +178,77 @@ def delete_account(client_socket, username):
 def list_users(client_socket, username):
     """Affiche la liste des utilisateurs (admin seulement)"""
     if username != "admin":
-        client_socket.send(b"Unauthorized command!\n")
+        client_socket.send(vigenere_encrypt("Unauthorized command!\n", ENCRYPTION_KEY).encode("utf-8"))
         return
     
     users = load_users()
     user_list = "\n".join(users.keys())
-    client_socket.send(f"Users:\n{user_list}\n".encode("utf-8"))
+    client_socket.send(vigenere_encrypt(f"Users:\n{user_list}\n", ENCRYPTION_KEY).encode("utf-8"))
     log_action(f"{username} listed all users.")
 
 def mute_user(client_socket, admin, username):
     """Mute un utilisateur"""
     if username not in connected_users:
-        client_socket.send(b"User not found or not online.\n")
+        client_socket.send(vigenere_encrypt("User not found or not online.\n", ENCRYPTION_KEY).encode("utf-8"))
         return
     if username in muted_users:
-        client_socket.send(b"User is already muted.\n")
+        client_socket.send(vigenere_encrypt("User is already muted.\n", ENCRYPTION_KEY).encode("utf-8"))
         return
     muted_users.add(username)
     log_action(f"{admin} muted {username}.")
-    client_socket.send(f"{username} has been muted.\n".encode("utf-8"))
+    client_socket.send(vigenere_encrypt(f"{username} has been muted.\n", ENCRYPTION_KEY).encode("utf-8"))
 
 def unmute_user(client_socket, admin, username):
     """Unmute un utilisateur"""
     if username not in muted_users:
-        client_socket.send(b"User is not muted.\n")
+        client_socket.send(vigenere_encrypt("User is not muted.\n", ENCRYPTION_KEY).encode("utf-8"))
         return
     muted_users.remove(username)
     log_action(f"{admin} unmuted {username}.")
-    client_socket.send(f"{username} has been unmuted.\n".encode("utf-8"))
+    client_socket.send(vigenere_encrypt(f"{username} has been unmuted.\n", ENCRYPTION_KEY).encode("utf-8"))
 
 def kick_user(client_socket, admin, username):
     """Kick un utilisateur"""
     for client, uname in clients:
         if uname == username:
-            client.send(b"You have been kicked by an admin.\n")
+            client.send(vigenere_encrypt("You have been kicked by an admin.\n", ENCRYPTION_KEY).encode("utf-8"))
             client.close()
             log_action(f"{admin} kicked {username}.")
-            client_socket.send(f"{username} has been kicked.\n".encode("utf-8"))
+            client_socket.send(vigenere_encrypt(f"{username} has been kicked.\n", ENCRYPTION_KEY).encode("utf-8"))
             return
-    client_socket.send(b"User not found or not online.\n")
+    client_socket.send(vigenere_encrypt("User not found or not online.\n", ENCRYPTION_KEY).encode("utf-8"))
 
 def ban_user(client_socket, admin, username):
     """Ban un utilisateur"""
     for client, uname in clients:
         if uname == username:
-            client.send(b"You have been banned by an admin.\n")
+            client.send(vigenere_encrypt("You have been banned by an admin.\n", ENCRYPTION_KEY).encode("utf-8"))
             client.close()
             log_action(f"{admin} banned {username}.")
-            client_socket.send(f"{username} has been banned.\n".encode("utf-8"))
+            client_socket.send(vigenere_encrypt(f"{username} has been banned.\n", ENCRYPTION_KEY).encode("utf-8"))
             banned_users.add(username)
             clients.remove((client, uname))
             connected_users.discard(username)
             return
-    client_socket.send(b"User not found or not online.\n")
+    client_socket.send(vigenere_encrypt("User not found or not online.\n", ENCRYPTION_KEY).encode("utf-8"))
 
 def unban_user(client_socket, admin, username):
     """Unban un utilisateur"""
     if username not in banned_users:
-        client_socket.send(b"User is not banned.\n")
+        client_socket.send(vigenere_encrypt("User is not banned.\n", ENCRYPTION_KEY).encode("utf-8"))
         return
     banned_users.remove(username)
     log_action(f"{admin} unbanned {username}.")
-    client_socket.send(f"{username} has been unbanned.\n".encode("utf-8"))
+    client_socket.send(vigenere_encrypt(f"{username} has been unbanned.\n", ENCRYPTION_KEY).encode("utf-8"))
 
 def whoami(client_socket, username):
     """Affiche le pseudo de l'utilisateur"""
-    client_socket.send(f"Your username is {username}\n".encode("utf-8"))
+    client_socket.send(vigenere_encrypt(f"Your username is {username}\n", ENCRYPTION_KEY).encode("utf-8"))
 
 def online(client_socket):
     """Affiche les utilisateurs connectés"""
     online_users = "\n".join(connected_users)
-    client_socket.send(f"Online users:\n{online_users}\n".encode("utf-8"))
+    client_socket.send(vigenere_encrypt(f"Online users:\n{online_users}\n", ENCRYPTION_KEY).encode("utf-8"))
 
 def handle_client(client_socket, addr):
     """Gère un client connecté"""
@@ -216,8 +256,8 @@ def handle_client(client_socket, addr):
 
     username = None
     while not username:
-        client_socket.send(b"Type 'login' to sign in or 'register' to create an account: ")
-        choice = client_socket.recv(1024).decode("utf-8").strip().lower()
+        client_socket.send(vigenere_encrypt("Type 'login' to sign in or 'register' to create an account: ", ENCRYPTION_KEY).encode("utf-8"))
+        choice = vigenere_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip().lower()
 
         if choice == "register":
             register(client_socket)
@@ -229,7 +269,7 @@ def handle_client(client_socket, addr):
     
     try:
         while True:
-            message = client_socket.recv(1024).decode("utf-8")
+            message = vigenere_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY)
             if not message:
                 break
 
@@ -265,10 +305,10 @@ def handle_client(client_socket, addr):
                 target = message.split(" ")[1]
                 unban_user(client_socket, username, target)
             elif message.startswith("/"):
-                client_socket.send(b"Unknown command. Type /help for a list of commands.\n")
+                client_socket.send(vigenere_encrypt("Unknown command. Type /help for a list of commands.\n", ENCRYPTION_KEY).encode("utf-8"))
             else:
                 if username in muted_users:
-                    client_socket.send(b"You are muted and cannot send messages.\n")
+                    client_socket.send(vigenere_encrypt("You are muted and cannot send messages.\n", ENCRYPTION_KEY).encode("utf-8"))
                 else:
                     log_action(f"{username}: {message}")
                     broadcast_message(f"{username}: {message}", client_socket)
@@ -286,10 +326,11 @@ def handle_client(client_socket, addr):
 
 def broadcast_message(message, sender_socket):
     """Diffuse un message à tous les clients sauf l'expéditeur"""
+    encrypted_message = vigenere_encrypt(message, ENCRYPTION_KEY)
     for client, _ in clients:
         if client != sender_socket:
             try:
-                client.send(message.encode("utf-8"))
+                client.send(encrypted_message.encode("utf-8"))
             except:
                 client.close()
                 clients.remove((client, _))
