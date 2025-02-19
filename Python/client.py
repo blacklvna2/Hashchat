@@ -2,42 +2,29 @@ import socket
 import threading
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+import base64
 
 SERVER_IP = "127.0.0.1"
 SERVER_PORT = 9999
-ENCRYPTION_KEY = "SECRETKEY"
+ENCRYPTION_KEY = b'Sixteen byte key'  # Clé AES doit être de 16, 24 ou 32 bytes
 
-def vigenere_encrypt(plain_text, key):
-    key = key.upper()
-    cipher_text = []
-    key_index = 0
-    for char in plain_text:
-        if char.isalpha():
-            shift = ord(key[key_index]) - ord('A')
-            if char.isupper():
-                cipher_text.append(chr((ord(char) - ord('A') + shift) % 26 + ord('A')))
-            else:
-                cipher_text.append(chr((ord(char) - ord('a') + shift) % 26 + ord('a')))
-            key_index = (key_index + 1) % len(key)
-        else:
-            cipher_text.append(char)
-    return ''.join(cipher_text)
+def aes_encrypt(plain_text, key):
+    """Chiffre un texte en clair en utilisant AES"""
+    cipher = AES.new(key, AES.MODE_CBC)
+    ct_bytes = cipher.encrypt(pad(plain_text.encode('utf-8'), AES.block_size))
+    iv = base64.b64encode(cipher.iv).decode('utf-8')
+    ct = base64.b64encode(ct_bytes).decode('utf-8')
+    return iv + ct
 
-def vigenere_decrypt(cipher_text, key):
-    key = key.upper()
-    plain_text = []
-    key_index = 0
-    for char in cipher_text:
-        if char.isalpha():
-            shift = ord(key[key_index]) - ord('A')
-            if char.isupper():
-                plain_text.append(chr((ord(char) - ord('A') - shift + 26) % 26 + ord('A')))
-            else:
-                plain_text.append(chr((ord(char) - ord('a') - shift + 26) % 26 + ord('a')))
-            key_index = (key_index + 1) % len(key)
-        else:
-            plain_text.append(char)
-    return ''.join(plain_text)
+def aes_decrypt(cipher_text, key):
+    """Déchiffre un texte chiffré en utilisant AES"""
+    iv = base64.b64decode(cipher_text[:24])
+    ct = base64.b64decode(cipher_text[24:])
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    pt = unpad(cipher.decrypt(ct), AES.block_size)
+    return pt.decode('utf-8')
 
 def receive_messages():
     global waiting_for_login
@@ -45,7 +32,7 @@ def receive_messages():
         try:
             message = client_socket.recv(1024).decode("utf-8")
             if message:
-                decrypted_message = vigenere_decrypt(message, ENCRYPTION_KEY)
+                decrypted_message = aes_decrypt(message, ENCRYPTION_KEY)
 
                 # Si le serveur demande login ou register, on attend une réponse utilisateur
                 if "login" in decrypted_message.lower() or "register" in decrypted_message.lower():
@@ -56,8 +43,8 @@ def receive_messages():
                     break
                 else:
                     display_message(decrypted_message)
-        except:
-            messagebox.showerror("Erreur", "Déconnecté du serveur")
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Déconnecté du serveur: {e}")
             client_socket.close()
             break
 
@@ -67,10 +54,10 @@ def send_message(event=None):
     
     if message:
         if waiting_for_login:  # Si on attend une réponse de connexion/enregistrement
-            client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
+            client_socket.send(aes_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
             waiting_for_login = False  # On repasse en mode chat normal
         else:
-            client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
+            client_socket.send(aes_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
             display_message(f"Moi: {message}")
 
         message_entry.delete(0, tk.END)
