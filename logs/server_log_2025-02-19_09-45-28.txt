@@ -2,3 +2,4 @@
 [2025-02-19 09:45:55] admin logged in.
 [2025-02-19 09:45:55] admin connected from ('127.0.0.1', 64574).
 [2025-02-19 09:46:04] admin changed their password.
+[2025-02-19 09:47:34] admin logged out.
