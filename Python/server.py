@@ -5,7 +5,7 @@ import os
 import datetime
 
 # Paramètres du serveur
-HOST = '10.2.111.56'
+HOST = '127.0.0.1'
 PORT = 12345
 clients = []  # Liste des (socket, username)
 connected_users = set()  # Liste des utilisateurs connectés
@@ -126,7 +126,7 @@ def logout(client_socket, username):
     log_action(f"{username} logged out.")
     clients.remove((client_socket, username))
     connected_users.discard(username)
-    client_socket.send(b"You have been logged out.\n")
+    client_socket.send(vigenere_encrypt("You have been logged out.\n", ENCRYPTION_KEY).encode("utf-8"))
     client_socket.close()
 
 def send_help(client_socket):
@@ -150,15 +150,15 @@ def send_help(client_socket):
 
 def change_password(client_socket, username):
     """Change le mot de passe de l'utilisateur"""
-    client_socket.send(b"Enter new password: ")
-    new_password = client_socket.recv(1024).decode("utf-8").strip()
+    client_socket.send(vigenere_encrypt("Enter new password: ", ENCRYPTION_KEY).encode("utf-8"))
+    new_password = vigenere_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
     
     users = load_users()
     users[username] = new_password
     save_users(users)
     log_action(f"{username} changed their password.")
     
-    client_socket.send(b"Password changed successfully!\n")
+    client_socket.send(vigenere_encrypt("Password changed successfully!\n", ENCRYPTION_KEY).encode("utf-8"))
 
 def delete_account(client_socket, username):
     """Supprime le compte utilisateur"""
@@ -169,10 +169,10 @@ def delete_account(client_socket, username):
         save_users(users)
         connected_users.discard(username)
         log_action(f"{username} deleted their account.")
-        client_socket.send(b"Account deleted. Goodbye!\n")
+        client_socket.send(vigenere_encrypt("Account deleted. Goodbye!\n", ENCRYPTION_KEY).encode("utf-8"))
         return True
     else:
-        client_socket.send(b"Error deleting account!\n")
+        client_socket.send(vigenere_encrypt("Error deleting account!\n", ENCRYPTION_KEY).encode("utf-8"))
         return False
 
 def list_users(client_socket, username):
