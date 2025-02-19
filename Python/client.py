@@ -45,13 +45,13 @@ def receive_messages():
             message = client_socket.recv(1024).decode("utf-8")
             if message:
                 decrypted_message = vigenere_decrypt(message, ENCRYPTION_KEY)
-                display_message(f"Serveur: {decrypted_message}")
+                display_message(decrypted_message)
         except:
             messagebox.showerror("Erreur", "Déconnecté du serveur")
             client_socket.close()
             break
 
-def send_message():
+def send_message(event=None):
     message = message_entry.get()
     if message:
         client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
@@ -87,6 +87,7 @@ def simple_input_popup(title, prompt):
     def submit():
         popup.destroy()
     
+    entry.bind("<Return>", lambda event: submit())
     tk.Button(popup, text="OK", command=submit).pack()
     popup.grab_set()
     popup.wait_window()
@@ -114,6 +115,7 @@ chat_display.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
 
 message_entry = tk.Entry(root, width=50)
 message_entry.pack(pady=5, padx=10, side=tk.LEFT, fill=tk.X, expand=True)
+message_entry.bind("<Return>", send_message)
 
 send_button = tk.Button(root, text="Envoyer", command=send_message)
 send_button.pack(pady=5, padx=10, side=tk.RIGHT)
