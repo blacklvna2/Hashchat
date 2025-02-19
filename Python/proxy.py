@@ -4,7 +4,7 @@ import threading
 # Configuration du MITM Proxy
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT = 9999  # Port du proxy
-SERVER_HOST = "127.0.0.1"
+SERVER_HOST = "10.2.111.56"
 SERVER_PORT = 12345  # Port du vrai serveur
 
 def handle_client(client_socket):

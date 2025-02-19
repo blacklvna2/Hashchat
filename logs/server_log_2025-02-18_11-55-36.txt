@@ -1,5 +1,0 @@
-[2025-02-18 11:55:36] Server started.
-[2025-02-18 11:55:58] admin logged in.
-[2025-02-18 11:55:58] admin connected from ('127.0.0.1', 54443).
-[2025-02-18 11:56:02] admin listed all users.
-[2025-02-18 11:56:35] admin logged out.

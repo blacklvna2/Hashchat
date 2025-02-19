@@ -5,7 +5,7 @@ import os
 import datetime
 
 # Paramètres du serveur
-HOST = '127.0.0.1'
+HOST = '10.2.111.56'
 PORT = 12345
 clients = []  # Liste des (socket, username)
 connected_users = set()  # Liste des utilisateurs connectés

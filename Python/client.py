@@ -1,16 +1,16 @@
 import socket
 import threading
+import tkinter as tk
+from tkinter import scrolledtext, messagebox
 
 SERVER_IP = "127.0.0.1"
 SERVER_PORT = 9999
 ENCRYPTION_KEY = "SECRETKEY"
 
 def vigenere_encrypt(plain_text, key):
-    """Chiffre un texte en clair en utilisant le chiffrement de Vigenère"""
     key = key.upper()
     cipher_text = []
     key_index = 0
-
     for char in plain_text:
         if char.isalpha():
             shift = ord(key[key_index]) - ord('A')
@@ -21,15 +21,12 @@ def vigenere_encrypt(plain_text, key):
             key_index = (key_index + 1) % len(key)
         else:
             cipher_text.append(char)
-
     return ''.join(cipher_text)
 
 def vigenere_decrypt(cipher_text, key):
-    """Déchiffre un texte chiffré en utilisant le chiffrement de Vigenère"""
     key = key.upper()
     plain_text = []
     key_index = 0
-
     for char in cipher_text:
         if char.isalpha():
             shift = ord(key[key_index]) - ord('A')
@@ -40,57 +37,89 @@ def vigenere_decrypt(cipher_text, key):
             key_index = (key_index + 1) % len(key)
         else:
             plain_text.append(char)
-
     return ''.join(plain_text)
 
-def receive_messages(client_socket):
-    """Reçoit et affiche les messages du serveur"""
+def receive_messages():
     while True:
         try:
             message = client_socket.recv(1024).decode("utf-8")
             if message:
                 decrypted_message = vigenere_decrypt(message, ENCRYPTION_KEY)
-                print("\n" + decrypted_message)
+                display_message(f"Serveur: {decrypted_message}")
         except:
-            print("[!] Déconnecté du serveur")
+            messagebox.showerror("Erreur", "Déconnecté du serveur")
             client_socket.close()
             break
 
-def login_or_register(client_socket):
-    """Gère la connexion et l'inscription"""
+def send_message():
+    message = message_entry.get()
+    if message:
+        client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
+        display_message(f"Moi: {message}")
+        message_entry.delete(0, tk.END)
+
+def display_message(message):
+    chat_display.config(state=tk.NORMAL)
+    chat_display.insert(tk.END, message + "\n")
+    chat_display.config(state=tk.DISABLED)
+    chat_display.yview(tk.END)
+
+def login_or_register():
     while True:
         server_msg = client_socket.recv(1024).decode("utf-8")
         decrypted_msg = vigenere_decrypt(server_msg, ENCRYPTION_KEY)
-        if "successful" in decrypted_msg:
-            print(decrypted_msg)
-            return
-        print(decrypted_msg, end="")
-        client_socket.send(vigenere_encrypt(input(), ENCRYPTION_KEY).encode("utf-8"))
+        if "successful" in decrypted_msg.lower():
+            messagebox.showinfo("Succès", decrypted_msg)
+            break
+        response = simple_input_popup("Connexion", decrypted_msg)
+        client_socket.send(vigenere_encrypt(response, ENCRYPTION_KEY).encode("utf-8"))
+
+def simple_input_popup(title, prompt):
+    user_input = tk.StringVar()
+    popup = tk.Toplevel()
+    popup.title(title)
+    
+    tk.Label(popup, text=prompt).pack()
+    entry = tk.Entry(popup, textvariable=user_input)
+    entry.pack()
+    entry.focus()
+    
+    def submit():
+        popup.destroy()
+    
+    tk.Button(popup, text="OK", command=submit).pack()
+    popup.grab_set()
+    popup.wait_window()
+    
+    return user_input.get()
 
 def start_client():
-    """Lance un client"""
-    while True:
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket.connect((SERVER_IP, SERVER_PORT))
-        print("[*] Connecté au serveur de chat")
+    global client_socket
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((SERVER_IP, SERVER_PORT))
+    login_or_register()
+    threading.Thread(target=receive_messages, daemon=True).start()
 
-        login_or_register(client_socket)
+def on_closing():
+    client_socket.close()
+    root.destroy()
 
-        # Thread pour écouter les messages entrants
-        thread = threading.Thread(target=receive_messages, args=(client_socket,))
-        thread.start()
+# Interface Tkinter
+root = tk.Tk()
+root.title("Chat Client")
+root.geometry("400x500")
 
-        while True:
-            message = input("")
-            if message.lower() == "/logout":
-                client_socket.send(vigenere_encrypt("/logout", ENCRYPTION_KEY).encode("utf-8"))
-                print("[*] Déconnexion en cours... Retour au menu principal.")
-                break
-            client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
+chat_display = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD)
+chat_display.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
 
-        client_socket.close()
-        print("[*] Déconnecté du serveur. Reconnexion au menu...")
-        # Retour au menu login/register sans fermer le client
+message_entry = tk.Entry(root, width=50)
+message_entry.pack(pady=5, padx=10, side=tk.LEFT, fill=tk.X, expand=True)
 
-if __name__ == "__main__":
-    start_client()
+send_button = tk.Button(root, text="Envoyer", command=send_message)
+send_button.pack(pady=5, padx=10, side=tk.RIGHT)
+
+# Démarrer le client en arrière-plan
+threading.Thread(target=start_client, daemon=True).start()
+
+root.protocol("WM_DELETE_WINDOW", on_closing)
+root.mainloop()
