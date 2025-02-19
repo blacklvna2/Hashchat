@@ -40,22 +40,39 @@ def vigenere_decrypt(cipher_text, key):
     return ''.join(plain_text)
 
 def receive_messages():
+    global waiting_for_login
     while True:
         try:
             message = client_socket.recv(1024).decode("utf-8")
             if message:
                 decrypted_message = vigenere_decrypt(message, ENCRYPTION_KEY)
-                display_message(decrypted_message)
+
+                # Si le serveur demande login ou register, on attend une réponse utilisateur
+                if "login" in decrypted_message.lower() or "register" in decrypted_message.lower():
+                    display_message(f"[SERVEUR] {decrypted_message}")
+                    waiting_for_login = True
+                elif decrypted_message.strip() == "/logout":
+                    logout()
+                    break
+                else:
+                    display_message(decrypted_message)
         except:
             messagebox.showerror("Erreur", "Déconnecté du serveur")
             client_socket.close()
             break
 
 def send_message(event=None):
+    global waiting_for_login
     message = message_entry.get()
+    
     if message:
-        client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
-        display_message(f"Moi: {message}")
+        if waiting_for_login:  # Si on attend une réponse de connexion/enregistrement
+            client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
+            waiting_for_login = False  # On repasse en mode chat normal
+        else:
+            client_socket.send(vigenere_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
+            display_message(f"Moi: {message}")
+
         message_entry.delete(0, tk.END)
 
 def display_message(message):
@@ -64,64 +81,40 @@ def display_message(message):
     chat_display.config(state=tk.DISABLED)
     chat_display.yview(tk.END)
 
-def login_or_register():
-    while True:
-        server_msg = client_socket.recv(1024).decode("utf-8")
-        decrypted_msg = vigenere_decrypt(server_msg, ENCRYPTION_KEY)
-        if "successful" in decrypted_msg.lower():
-            messagebox.showinfo("Succès", decrypted_msg)
-            break
-        response = simple_input_popup("Connexion", decrypted_msg)
-        client_socket.send(vigenere_encrypt(response, ENCRYPTION_KEY).encode("utf-8"))
-
-def simple_input_popup(title, prompt):
-    user_input = tk.StringVar()
-    popup = tk.Toplevel()
-    popup.title(title)
-    
-    tk.Label(popup, text=prompt).pack()
-    entry = tk.Entry(popup, textvariable=user_input)
-    entry.pack()
-    entry.focus()
-    
-    def submit():
-        popup.destroy()
-    
-    entry.bind("<Return>", lambda event: submit())
-    tk.Button(popup, text="OK", command=submit).pack()
-    popup.grab_set()
-    popup.wait_window()
-    
-    return user_input.get()
-
 def start_client():
-    global client_socket
+    global client_socket, waiting_for_login
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((SERVER_IP, SERVER_PORT))
-    login_or_register()
+    
+    waiting_for_login = False  # On commence en mode chat normal
     threading.Thread(target=receive_messages, daemon=True).start()
 
-def on_closing():
+def logout():
+    messagebox.showinfo("Déconnexion", "Vous êtes déconnecté.")
     client_socket.close()
-    root.destroy()
 
-# Interface Tkinter
-root = tk.Tk()
-root.title("Chat Client")
-root.geometry("400x500")
+def main():
+    global root, chat_display, message_entry
+    root = tk.Tk()
+    root.title("Chat Client")
+    root.geometry("600x750")
 
-chat_display = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD)
-chat_display.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+    chat_display = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD)
+    chat_display.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
 
-message_entry = tk.Entry(root, width=50)
-message_entry.pack(pady=5, padx=10, side=tk.LEFT, fill=tk.X, expand=True)
-message_entry.bind("<Return>", send_message)
+    message_entry = tk.Entry(root, width=50)
+    message_entry.pack(pady=5, padx=10, side=tk.LEFT, fill=tk.X, expand=True)
+    message_entry.bind("<Return>", send_message)
 
-send_button = tk.Button(root, text="Envoyer", command=send_message)
-send_button.pack(pady=5, padx=10, side=tk.RIGHT)
+    send_button = tk.Button(root, text="Envoyer", command=send_message)
+    send_button.pack(pady=5, padx=10, side=tk.RIGHT)
 
-# Démarrer le client en arrière-plan
-threading.Thread(target=start_client, daemon=True).start()
+    logout_button = tk.Button(root, text="Logout", command=logout)
+    logout_button.pack(pady=5, padx=10, side=tk.BOTTOM)
 
-root.protocol("WM_DELETE_WINDOW", on_closing)
-root.mainloop()
+    threading.Thread(target=start_client, daemon=True).start()
+
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
