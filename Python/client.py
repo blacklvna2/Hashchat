@@ -41,6 +41,14 @@ def receive_messages():
                 elif decrypted_message.strip() == "/logout":
                     logout()
                     break
+                elif decrypted_message.strip() == "You have been kicked by an admin.":
+                    display_message(f'{decrypted_message}, Fermeture de la fenetre dans 2 secondes')
+                    root.after(2000, root.destroy)
+                    break
+                elif decrypted_message.strip() == "You have been banned by an admin.":
+                    display_message(f'{decrypted_message}, Fermeture de la fenetre dans 2 secondes')
+                    root.after(2000, root.destroy)
+                    break
                 else:
                     display_message(decrypted_message)
         except Exception as e:
@@ -77,8 +85,16 @@ def start_client():
     threading.Thread(target=receive_messages, daemon=True).start()
 
 def logout():
-    messagebox.showinfo("Déconnexion", "Vous êtes déconnecté.")
-    client_socket.close()
+    messagebox.showinfo("Déconnexion", "Vous êtes déconnecté. Fermeture dans 2 secondes...")
+    
+    try:
+        client_socket.send(aes_encrypt("/logout", ENCRYPTION_KEY).encode("utf-8"))
+        client_socket.close()
+        root.after(2000, root.destroy)
+    except:
+        pass  # Si la connexion est déjà fermée, on ignore l'erreur
+
+
 
 def main():
     global root, chat_display, message_entry
