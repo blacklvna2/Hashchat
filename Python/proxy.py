@@ -40,3 +40,4 @@ if __name__ == "__main__":
         client_socket, addr = proxy.accept()
         print(f"[+] Connexion interceptée de {addr}")
         threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start()
+
