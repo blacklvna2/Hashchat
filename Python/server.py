@@ -1,22 +1,34 @@
 import socket
 import threading
-import json
 import os
 import datetime
-from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
+import json
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 import base64
 
 # Paramètres du serveur
 HOST = '127.0.0.1'
 PORT = 12345
-clients = []  # Liste des (socket, username)
+clients = []  # Liste des (socket, username, public_key)
 connected_users = set()  # Liste des utilisateurs connectés
 muted_users = set()  # Liste des utilisateurs mutés
 banned_users = set()  # Liste des utilisateurs bannis
 user_data_file = "users.json"
-# Clé de chiffrement partagée
-ENCRYPTION_KEY = b'Sixteen byte key'  # Clé AES doit être de 16, 24 ou 32 bytes
+
+# Générer une paire de clés RSA pour le serveur
+server_key = RSA.generate(2048)
+server_public_key = server_key.publickey().export_key()
+server_private_key = server_key.export_key()
+
+# Sauvegarder la clé publique du serveur dans un fichier
+with open("server_public_key.pem", "wb") as f:
+    f.write(server_public_key)
+
+# Sauvegarder la clé privée du serveur dans un fichier (optionnel)
+with open("server_private_key.pem", "wb") as f:
+    f.write(server_private_key)
 
 # Création du dossier logs
 if not os.path.exists("logs"):
@@ -28,7 +40,7 @@ log_filename = f"logs/server_log_{datetime.datetime.now().strftime('%Y-%m-%d_%H-
 def log_action(action):
     """Enregistre une action dans le fichier log"""
     with open(log_filename, "a") as log_file:
-        log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {action}\n")
+        log_file.write(f"{datetime.datetime.now()} - {action}\n")
 
 def load_users():
     """Charge les utilisateurs depuis le fichier JSON"""
@@ -38,59 +50,56 @@ def load_users():
 def save_users(users):
     """Enregistre les utilisateurs dans le fichier JSON"""
     with open(user_data_file, "w") as f:
-        json.dump(users, f, indent=4)
+        json.dump(users, f)
 
-def aes_encrypt(plain_text, key):
-    """Chiffre un texte en clair en utilisant AES"""
-    cipher = AES.new(key, AES.MODE_CBC)
-    ct_bytes = cipher.encrypt(pad(plain_text.encode('utf-8'), AES.block_size))
-    iv = base64.b64encode(cipher.iv).decode('utf-8')
-    ct = base64.b64encode(ct_bytes).decode('utf-8')
-    return iv + ct
+def rsa_encrypt(plain_text, public_key):
+    """Chiffre un texte en clair en utilisant RSA"""
+    recipient_key = RSA.import_key(public_key)
+    cipher_rsa = PKCS1_OAEP.new(recipient_key)
+    encrypted_message = cipher_rsa.encrypt(plain_text.encode('utf-8'))
+    return base64.b64encode(encrypted_message).decode('utf-8')
 
-def aes_decrypt(cipher_text, key):
-    """Déchiffre un texte chiffré en utilisant AES"""
-    iv = base64.b64decode(cipher_text[:24])
-    ct = base64.b64decode(cipher_text[24:])
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    pt = unpad(cipher.decrypt(ct), AES.block_size)
-    return pt.decode('utf-8')
+def rsa_decrypt(cipher_text, private_key):
+    """Déchiffre un texte chiffré en utilisant RSA"""
+    private_key = RSA.import_key(private_key)
+    cipher_rsa = PKCS1_OAEP.new(private_key)
+    decrypted_message = cipher_rsa.decrypt(base64.b64decode(cipher_text))
+    return decrypted_message.decode('utf-8')
 
 def register(client_socket):
     """Gère l'inscription"""
-    client_socket.send(aes_encrypt("Enter username: ", ENCRYPTION_KEY).encode("utf-8"))
-    username = aes_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
+    client_socket.send(rsa_encrypt("Enter username: ", server_public_key).encode("utf-8"))
+    username = rsa_decrypt(client_socket.recv(1024).decode("utf-8"), server_private_key).strip()
     
-    client_socket.send(aes_encrypt("Enter password: ", ENCRYPTION_KEY).encode("utf-8"))
-    password = aes_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
+    client_socket.send(rsa_encrypt("Enter password: ", server_public_key).encode("utf-8"))
+    password = rsa_decrypt(client_socket.recv(1024).decode("utf-8"), server_private_key).strip()
 
     users = load_users()
     if username in users:
-        client_socket.send(aes_encrypt("Username already exists!\n", ENCRYPTION_KEY).encode("utf-8"))
+        client_socket.send(rsa_encrypt("Username already exists.\n", server_public_key).encode("utf-8"))
         return None
 
     users[username] = password
     save_users(users)
     log_action(f"New user registered: {username}")
-    client_socket.send(aes_encrypt("Registration successful!\n", ENCRYPTION_KEY).encode("utf-8"))
+    client_socket.send(rsa_encrypt("Registration successful!\n", server_public_key).encode("utf-8"))
     return None
 
 def login(client_socket):
     """Gère la connexion"""
-    client_socket.send(aes_encrypt("Enter username: ", ENCRYPTION_KEY).encode("utf-8"))
-    username = aes_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
+    client_socket.send(rsa_encrypt("Enter username: ", server_public_key).encode("utf-8"))
+    username = rsa_decrypt(client_socket.recv(1024).decode("utf-8"), server_private_key).strip()
     
     if username in banned_users:
-        client_socket.send(aes_encrypt("You are banned from this server!\n", ENCRYPTION_KEY).encode("utf-8"))
+        client_socket.send(rsa_encrypt("You are banned from this server.\n", server_public_key).encode("utf-8"))
         return None
 
-    client_socket.send(aes_encrypt("Enter password: ", ENCRYPTION_KEY).encode("utf-8"))
-    password = aes_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
+    client_socket.send(rsa_encrypt("Enter password: ", server_public_key).encode("utf-8"))
+    password = rsa_decrypt(client_socket.recv(1024).decode("utf-8"), server_private_key).strip()
 
     users = load_users()
-    
-    if username in connected_users:
-        client_socket.send(aes_encrypt("User already logged in!\n", ENCRYPTION_KEY).encode("utf-8"))
+    if username not in users or users[username] != password:
+        client_socket.send(rsa_encrypt("Invalid username or password.\n", server_public_key).encode("utf-8"))
         return None
 
     if users.get(username) == password:
@@ -101,235 +110,231 @@ def login(client_socket):
         return username
     else:
         client_socket.send(aes_encrypt("Invalid credentials!\n", ENCRYPTION_KEY).encode("utf-8"))
+    if username in connected_users:
+        client_socket.send(rsa_encrypt("User already logged in.\n", server_public_key).encode("utf-8"))
         return None
 
+    log_action(f"User logged in: {username}")
+    client_socket.send(rsa_encrypt("Login successful!\n", server_public_key).encode("utf-8"))
+    return username
+
 def logout(client_socket, username):
-    """Gère la déconnexion de l'utilisateur"""
-    log_action(f"{username} logged out.")
-    clients.remove((client_socket, username))
-    connected_users.discard(username)
-    client_socket.send(aes_encrypt("You have been logged out.\n", ENCRYPTION_KEY).encode("utf-8"))
-    client_socket.close()
+    """Gère la déconnexion"""
+    log_action(f"User logged out: {username}")
+    client_socket.send(rsa_encrypt("Logout successful!\n", server_public_key).encode("utf-8"))
 
 def send_help(client_socket):
-    """Affiche la liste des commandes disponibles"""
-    commands = """
-    [COMMANDS]
-    /help           - Affiche cette liste
-    /logout         - Se déconnecter
-    /whoami         - Affiche votre pseudo
-    /online         - Affiche les utilisateurs connectés
-    /changepass     - Changer son mot de passe
-    /deleteaccount  - Supprimer son compte
-    /listusers      - Lister les utilisateurs (admin seulement)
-    /mute <user>    - Mute un utilisateur (admin)
-    /unmute <user>  - Unmute un utilisateur (admin)
-    /kick <user>    - Expulse un utilisateur (admin)
-    /ban <user>     - Expulse et bannit un utilisateur (admin)
-    /unban <user>   - Unban un utilisateur (admin)
+    """Envoie la liste des commandes disponibles"""
+    help_message = """
+    Available commands:
+    /help - Show this help message
+    /logout - Logout from the server
+    /changepassword - Change your password
+    /deleteaccount - Delete your account
+    /listusers - List all users
+    /mute <username> - Mute a user (admin only)
+    /unmute <username> - Unmute a user (admin only)
+    /kick <username> - Kick a user (admin only)
+    /ban <username> - Ban a user (admin only)
+    /unban <username> - Unban a user (admin only)
+    /whoami - Show your username
+    /online - Show online users
     """
-    client_socket.send(aes_encrypt(commands, ENCRYPTION_KEY).encode("utf-8"))
+    client_socket.send(rsa_encrypt(help_message, server_public_key).encode("utf-8"))
 
 def change_password(client_socket, username):
-    """Change le mot de passe de l'utilisateur"""
-    client_socket.send(aes_encrypt("Enter new password: ", ENCRYPTION_KEY).encode("utf-8"))
-    new_password = aes_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip()
-    
+    """Permet de changer le mot de passe"""
+    client_socket.send(rsa_encrypt("Enter new password: ", server_public_key).encode("utf-8"))
+    new_password = rsa_decrypt(client_socket.recv(1024).decode("utf-8"), server_private_key).strip()
+
     users = load_users()
     users[username] = new_password
     save_users(users)
-    log_action(f"{username} changed their password.")
-    
-    client_socket.send(aes_encrypt("Password changed successfully!\n", ENCRYPTION_KEY).encode("utf-8"))
+    log_action(f"User changed password: {username}")
+    client_socket.send(rsa_encrypt("Password changed successfully!\n", server_public_key).encode("utf-8"))
 
 def delete_account(client_socket, username):
-    """Supprime le compte utilisateur"""
+    """Permet de supprimer un compte utilisateur"""
     users = load_users()
-    
     if username in users:
         del users[username]
         save_users(users)
-        connected_users.discard(username)
-        log_action(f"{username} deleted their account.")
-        client_socket.send(aes_encrypt("Account deleted. Goodbye!\n", ENCRYPTION_KEY).encode("utf-8"))
-        return True
+        log_action(f"User deleted account: {username}")
+        client_socket.send(rsa_encrypt("Account deleted successfully!\n", server_public_key).encode("utf-8"))
     else:
-        client_socket.send(aes_encrypt("Error deleting account!\n", ENCRYPTION_KEY).encode("utf-8"))
-        return False
+        client_socket.send(rsa_encrypt("Account not found.\n", server_public_key).encode("utf-8"))
 
 def list_users(client_socket, username):
-    """Affiche la liste des utilisateurs (admin seulement)"""
-    if username != "admin":
-        client_socket.send(aes_encrypt("Unauthorized command!\n", ENCRYPTION_KEY).encode("utf-8"))
-        return
-    
+    """Liste tous les utilisateurs"""
     users = load_users()
     user_list = "\n".join(users.keys())
-    client_socket.send(aes_encrypt(f"Users:\n{user_list}\n", ENCRYPTION_KEY).encode("utf-8"))
-    log_action(f"{username} listed all users.")
+    client_socket.send(rsa_encrypt(f"Users:\n{user_list}\n", server_public_key).encode("utf-8"))
 
 def mute_user(client_socket, admin, username):
-    """Mute un utilisateur"""
-    if username not in connected_users:
-        client_socket.send(aes_encrypt("User not found or not online.\n", ENCRYPTION_KEY).encode("utf-8"))
+    """Permet de muter un utilisateur (admin seulement)"""
+    if admin != "admin":
+        client_socket.send(rsa_encrypt("Permission denied.\n", server_public_key).encode("utf-8"))
         return
-    if username in muted_users:
-        client_socket.send(aes_encrypt("User is already muted.\n", ENCRYPTION_KEY).encode("utf-8"))
-        return
+
     muted_users.add(username)
-    log_action(f"{admin} muted {username}.")
-    client_socket.send(aes_encrypt(f"{username} has been muted.\n", ENCRYPTION_KEY).encode("utf-8"))
+    log_action(f"User muted: {username}")
+    client_socket.send(rsa_encrypt(f"User {username} muted.\n", server_public_key).encode("utf-8"))
 
 def unmute_user(client_socket, admin, username):
-    """Unmute un utilisateur"""
-    if username not in muted_users:
-        client_socket.send(aes_encrypt("User is not muted.\n", ENCRYPTION_KEY).encode("utf-8"))
+    """Permet de démuter un utilisateur (admin seulement)"""
+    if admin != "admin":
+        client_socket.send(rsa_encrypt("Permission denied.\n", server_public_key).encode("utf-8"))
         return
-    muted_users.remove(username)
-    log_action(f"{admin} unmuted {username}.")
-    client_socket.send(aes_encrypt(f"{username} has been unmuted.\n", ENCRYPTION_KEY).encode("utf-8"))
+
+    muted_users.discard(username)
+    log_action(f"User unmuted: {username}")
+    client_socket.send(rsa_encrypt(f"User {username} unmuted.\n", server_public_key).encode("utf-8"))
 
 def kick_user(client_socket, admin, username):
-    """Kick un utilisateur"""
-    for client, uname in clients:
-        if uname == username:
-            client.send(aes_encrypt("You have been kicked by an admin.\n", ENCRYPTION_KEY).encode("utf-8"))
-            client.close()
-            log_action(f"{admin} kicked {username}.")
-            client_socket.send(aes_encrypt(f"{username} has been kicked.\n", ENCRYPTION_KEY).encode("utf-8"))
-            return
-    client_socket.send(aes_encrypt("User not found or not online.\n", ENCRYPTION_KEY).encode("utf-8"))
+    """Permet de kicker un utilisateur (admin seulement)"""
+    if admin != "admin":
+        client_socket.send(rsa_encrypt("Permission denied.\n", server_public_key).encode("utf-8"))
+        return
+
+    for client in clients:
+        if client[1] == username:
+            client[0].send(rsa_encrypt("You have been kicked by an admin.\n", server_public_key).encode("utf-8"))
+            client[0].close()
+            clients.remove(client)
+            log_action(f"User kicked: {username}")
+            break
 
 def ban_user(client_socket, admin, username):
-    """Ban un utilisateur"""
-    for client, uname in clients:
-        if uname == username:
-            client.send(aes_encrypt("You have been banned by an admin.\n", ENCRYPTION_KEY).encode("utf-8"))
-            client.close()
-            log_action(f"{admin} banned {username}.")
-            client_socket.send(aes_encrypt(f"{username} has been banned.\n", ENCRYPTION_KEY).encode("utf-8"))
-            banned_users.add(username)
-            clients.remove((client, uname))
-            connected_users.discard(username)
-            return
-    client_socket.send(aes_encrypt("User not found or not online.\n", ENCRYPTION_KEY).encode("utf-8"))
+    """Permet de bannir un utilisateur (admin seulement)"""
+    if admin != "admin":
+        client_socket.send(rsa_encrypt("Permission denied.\n", server_public_key).encode("utf-8"))
+        return
+
+    banned_users.add(username)
+    log_action(f"User banned: {username}")
+    client_socket.send(rsa_encrypt(f"User {username} banned.\n", server_public_key).encode("utf-8"))
 
 def unban_user(client_socket, admin, username):
-    """Unban un utilisateur"""
-    if username not in banned_users:
-        client_socket.send(aes_encrypt("User is not banned.\n", ENCRYPTION_KEY).encode("utf-8"))
+    """Permet de débannir un utilisateur (admin seulement)"""
+    if admin != "admin":
+        client_socket.send(rsa_encrypt("Permission denied.\n", server_public_key).encode("utf-8"))
         return
-    banned_users.remove(username)
-    log_action(f"{admin} unbanned {username}.")
-    client_socket.send(aes_encrypt(f"{username} has been unbanned.\n", ENCRYPTION_KEY).encode("utf-8"))
+
+    banned_users.discard(username)
+    log_action(f"User unbanned: {username}")
+    client_socket.send(rsa_encrypt(f"User {username} unbanned.\n", server_public_key).encode("utf-8"))
 
 def whoami(client_socket, username):
-    """Affiche le pseudo de l'utilisateur"""
-    client_socket.send(aes_encrypt(f"Your username is {username}\n", ENCRYPTION_KEY).encode("utf-8"))
+    """Affiche le nom d'utilisateur"""
+    client_socket.send(rsa_encrypt(f"You are {username}\n", server_public_key).encode("utf-8"))
 
 def online(client_socket):
-    """Affiche les utilisateurs connectés"""
-    online_users = "\n".join(connected_users)
-    client_socket.send(aes_encrypt(f"Online users:\n{online_users}\n", ENCRYPTION_KEY).encode("utf-8"))
+    """Affiche les utilisateurs en ligne"""
+    online_users = "\n".join([client[1] for client in clients])
+    client_socket.send(rsa_encrypt(f"Online users:\n{online_users}\n", server_public_key).encode("utf-8"))
 
 def handle_client(client_socket, addr):
-    """Gère un client connecté"""
-    print(f"[+] Nouvelle connexion de {addr}")
+    """Gère les interactions avec un client"""
+    print(f"[+] New connection from {addr}")
+    client_socket.send(rsa_encrypt("Welcome to the server!\n", server_public_key).encode("utf-8"))
 
-    username = None
-    while not username:
-        client_socket.send(aes_encrypt("Type 'login' to sign in or 'register' to create an account: ", ENCRYPTION_KEY).encode("utf-8"))
-        choice = aes_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY).strip().lower()
+    # Recevoir la clé publique du client
+    client_public_key = client_socket.recv(1024)
+    clients.append((client_socket, None, client_public_key))
 
-        if choice == "register":
-            register(client_socket)
-        elif choice == "login":
-            username = login(client_socket)
-
-    clients.append((client_socket, username))
-    log_action(f"{username} connected from {addr}.")
-    
-    try:
-        while True:
-            message = aes_decrypt(client_socket.recv(1024).decode("utf-8"), ENCRYPTION_KEY)
-            if not message:
-                break
-
-            if message.lower() == "/logout":
-                logout(client_socket, username)
-                break
-            elif message.lower() == "/changepass":
-                change_password(client_socket, username)
-            elif message.lower() == "/help":
-                send_help(client_socket)
-            elif message.lower() == "/deleteaccount":
-                if delete_account(client_socket, username):
-                    break
-            elif message.lower() == "/listusers" and username == "admin":
-                list_users(client_socket, username)
-            elif message.lower() == "/whoami":
-                whoami(client_socket, username)
-            elif message.lower() == "/online":
-                online(client_socket)
-            elif message.startswith("/mute ") and username == "admin":
-                target = message.split(" ")[1]
-                mute_user(client_socket, username, target)
-            elif message.startswith("/unmute ") and username == "admin":
-                target = message.split(" ")[1]
-                unmute_user(client_socket, username, target)
-            elif message.startswith("/kick ") and username == "admin":
-                target = message.split(" ")[1]
-                kick_user(client_socket, username, target)
-            elif message.startswith("/ban ") and username == "admin":
-                target = message.split(" ")[1]
-                ban_user(client_socket, username, target)
-            elif message.startswith("/unban ") and username == "admin":
-                target = message.split(" ")[1]
-                unban_user(client_socket, username, target)
-            elif message.startswith("/"):
-                client_socket.send(aes_encrypt("Unknown command. Type /help for a list of commands.\n", ENCRYPTION_KEY).encode("utf-8"))
-            else:
-                if username in muted_users:
-                    client_socket.send(aes_encrypt("You are muted and cannot send messages.\n", ENCRYPTION_KEY).encode("utf-8"))
+    while True:
+        try:
+            message = rsa_decrypt(client_socket.recv(1024).decode("utf-8"), server_private_key)
+            if message.startswith("/"):
+                command, *args = message.split()
+                if command == "/register":
+                    register(client_socket)
+                elif command == "/login":
+                    username = login(client_socket)
+                    if username:
+                        for i, client in enumerate(clients):
+                            if client[0] == client_socket:
+                                clients[i] = (client_socket, username, client_public_key)
+                                break
+                elif command == "/logout":
+                    username = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if username:
+                        logout(client_socket, username)
+                        clients.remove((client_socket, username, client_public_key))
+                        break
+                elif command == "/help":
+                    send_help(client_socket)
+                elif command == "/changepassword":
+                    username = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if username:
+                        change_password(client_socket, username)
+                elif command == "/deleteaccount":
+                    username = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if username:
+                        delete_account(client_socket, username)
+                        clients.remove((client_socket, username, client_public_key))
+                        break
+                elif command == "/listusers":
+                    username = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if username:
+                        list_users(client_socket, username)
+                elif command == "/mute":
+                    admin = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if admin:
+                        mute_user(client_socket, admin, args[0])
+                elif command == "/unmute":
+                    admin = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if admin:
+                        unmute_user(client_socket, admin, args[0])
+                elif command == "/kick":
+                    admin = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if admin:
+                        kick_user(client_socket, admin, args[0])
+                elif command == "/ban":
+                    admin = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if admin:
+                        ban_user(client_socket, admin, args[0])
+                elif command == "/unban":
+                    admin = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if admin:
+                        unban_user(client_socket, admin, args[0])
+                elif command == "/whoami":
+                    username = next((client[1] for client in clients if client[0] == client_socket), None)
+                    if username:
+                        whoami(client_socket, username)
+                elif command == "/online":
+                    online(client_socket)
                 else:
-                    log_action(f"{username}: {message}")
-                    broadcast_message(f"{username}: {message}", client_socket)
+                    client_socket.send(rsa_encrypt("Unknown command.\n", server_public_key).encode("utf-8"))
+            else:
+                broadcast_message(message, client_socket)
+        except Exception as e:
+            print(f"[-] Error: {e}")
+            break
 
-    except Exception as e:
-        print(f"Exception: {e}")
-
-    if username:
-        logout(client_socket, username)
-
-    log_action(f"{username} logged out.")
-    clients.remove((client_socket, username))
-    connected_users.discard(username)
     client_socket.close()
 
 def broadcast_message(message, sender_socket):
-    """Diffuse un message à tous les clients sauf l'expéditeur"""
-    encrypted_message = aes_encrypt(message, ENCRYPTION_KEY)
-    for client, _ in clients:
-        if client != sender_socket:
+    """Diffuse un message à tous les clients"""
+    for client_socket, username, public_key in clients:
+        if client_socket != sender_socket:
             try:
-                client.send(encrypted_message.encode("utf-8"))
+                encrypted_message = rsa_encrypt(message, public_key)
+                client_socket.send(encrypted_message.encode("utf-8"))
             except:
-                client.close()
-                clients.remove((client, _))
+                client_socket.close()
+                clients.remove((client_socket, username, public_key))
 
 def start_server():
-    """Lance le serveur"""
-    log_action("Server started.")
-    print("Server started.")
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((HOST, PORT))
-    server.listen(5)
-    print(f"Listening on {HOST}:{PORT}")
+    """Démarre le serveur"""
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen(5)
+    print(f"[*] Server listening on {HOST}:{PORT}")
 
     while True:
-        client_socket, addr = server.accept()
-        print(f"Accepted connection from {addr}")
-        threading.Thread(target=handle_client, args=(client_socket, addr)).start()
+        client_socket, addr = server_socket.accept()
+        threading.Thread(target=handle_client, args=(client_socket, addr), daemon=True).start()
 
 if __name__ == "__main__":
     start_server()
