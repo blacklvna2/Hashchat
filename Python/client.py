@@ -5,6 +5,8 @@ from tkinter import scrolledtext, messagebox
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import base64
+import os
+import signal
 
 SERVER_IP = "127.0.0.1"
 SERVER_PORT = 9999
@@ -26,7 +28,7 @@ def rsa_decrypt(cipher_text, private_key):
     return decrypted_message.decode('utf-8')
 
 def receive_messages():
-    global waiting_for_login
+    global waiting_for_login, is_logged_in
     while True:
         try:
             message = client_socket.recv(1024).decode("utf-8")
@@ -36,6 +38,10 @@ def receive_messages():
                 if "login" in decrypted_message.lower() or "register" in decrypted_message.lower():
                     display_message(f"[SERVEUR] {decrypted_message}")
                     waiting_for_login = True
+                elif decrypted_message.strip() == "CONNECTED":
+                    is_logged_in = True
+                    waiting_for_login = False
+                    display_message(f"[SERVEUR] {decrypted_message}")
                 elif decrypted_message.strip() == "/logout":
                     logout()
                     break
@@ -55,13 +61,15 @@ def receive_messages():
             break
 
 def send_message(event=None):
-    global waiting_for_login
+    global waiting_for_login, is_logged_in
     message = message_entry.get()
     
     if message:
         encrypted_message = rsa_encrypt(message, server_public_key)
-        client_socket.send(encrypted_message.encode("utf-8"))
-        if not waiting_for_login:
+        if waiting_for_login:  # Si on attend une réponse de connexion/enregistrement
+            client_socket.send(encrypted_message.encode("utf-8"))
+        elif is_logged_in:  # Si l'utilisateur est connecté
+            client_socket.send(encrypted_message.encode("utf-8"))
             display_message(f"Moi: {message}")
 
         message_entry.delete(0, tk.END)
@@ -73,7 +81,7 @@ def display_message(message):
     chat_display.yview(tk.END)
 
 def start_client():
-    global client_socket, waiting_for_login, client_private_key
+    global client_socket, waiting_for_login, client_private_key, is_logged_in
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((SERVER_IP, SERVER_PORT))
     
@@ -85,6 +93,7 @@ def start_client():
     # Envoyer la clé publique du client au serveur
     client_socket.send(client_public_key)
     
+    is_logged_in = False
     waiting_for_login = False
     threading.Thread(target=receive_messages, daemon=True).start()
 
@@ -97,29 +106,40 @@ def logout():
         client_socket.close()
         root.after(2000, root.destroy)
     except:
-        pass
+        pass  # Si la connexion est déjà fermée, on ignore l'erreur
+
+def on_closing():
+    logout()
+    os.kill(os.getpid(), signal.SIGTERM)
 
 def main():
     global root, chat_display, message_entry
     root = tk.Tk()
     root.title("Chat Client")
-    root.geometry("600x750")
+    root.geometry("500x500")
+    root.minsize(500, 300)  # Définir la taille minimale de la fenêtre
+
+    root.grid_rowconfigure(0, weight=1)
+    root.grid_columnconfigure(0, weight=1)
+    root.grid_columnconfigure(1, weight=1)
+    root.grid_columnconfigure(2, weight=1)
 
     chat_display = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD)
-    chat_display.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+    chat_display.grid(row=0, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
 
-    message_entry = tk.Entry(root, width=50)
-    message_entry.pack(pady=5, padx=10, side=tk.LEFT, fill=tk.X, expand=True)
+    message_entry = tk.Entry(root, width=40)
+    message_entry.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
     message_entry.bind("<Return>", send_message)
 
     send_button = tk.Button(root, text="Envoyer", command=send_message)
-    send_button.pack(pady=5, padx=10, side=tk.RIGHT)
+    send_button.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
 
     logout_button = tk.Button(root, text="Logout", command=logout)
-    logout_button.pack(pady=5, padx=10, side=tk.BOTTOM)
+    logout_button.grid(row=1, column=2, padx=10, pady=5, sticky="ew")
 
     threading.Thread(target=start_client, daemon=True).start()
 
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
 
 if __name__ == "__main__":

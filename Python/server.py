@@ -2,6 +2,7 @@ import socket
 import threading
 import os
 import datetime
+from Crypto.Util.Padding import pad, unpad
 import json
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
@@ -101,6 +102,14 @@ def login(client_socket):
         client_socket.send(rsa_encrypt("Invalid username or password.\n", server_public_key).encode("utf-8"))
         return None
 
+    if users.get(username) == password:
+        client_socket.send(aes_encrypt("Login successful!", ENCRYPTION_KEY).encode("utf-8"))
+        client_socket.send(aes_encrypt("CONNECTED", ENCRYPTION_KEY).encode("utf-8"))
+        connected_users.add(username)
+        log_action(f"{username} logged in.")
+        return username
+    else:
+        client_socket.send(aes_encrypt("Invalid credentials!\n", ENCRYPTION_KEY).encode("utf-8"))
     if username in connected_users:
         client_socket.send(rsa_encrypt("User already logged in.\n", server_public_key).encode("utf-8"))
         return None
