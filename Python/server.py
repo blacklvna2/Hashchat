@@ -5,7 +5,6 @@ import os
 import datetime
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-from Crypto.Random import get_random_bytes
 import base64
 
 # Paramètres du serveur
@@ -95,7 +94,8 @@ def login(client_socket):
         return None
 
     if users.get(username) == password:
-        client_socket.send(aes_encrypt("Login successful!\n", ENCRYPTION_KEY).encode("utf-8"))
+        client_socket.send(aes_encrypt("Login successful!", ENCRYPTION_KEY).encode("utf-8"))
+        client_socket.send(aes_encrypt("CONNECTED", ENCRYPTION_KEY).encode("utf-8"))
         connected_users.add(username)
         log_action(f"{username} logged in.")
         return username
