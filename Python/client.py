@@ -2,29 +2,28 @@ import socket
 import threading
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad, unpad
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 import base64
 
 SERVER_IP = "127.0.0.1"
 SERVER_PORT = 9999
-ENCRYPTION_KEY = b'Sixteen byte key'  # Clé AES doit être de 16, 24 ou 32 bytes
 
-def aes_encrypt(plain_text, key):
-    """Chiffre un texte en clair en utilisant AES"""
-    cipher = AES.new(key, AES.MODE_CBC)
-    ct_bytes = cipher.encrypt(pad(plain_text.encode('utf-8'), AES.block_size))
-    iv = base64.b64encode(cipher.iv).decode('utf-8')
-    ct = base64.b64encode(ct_bytes).decode('utf-8')
-    return iv + ct
+# Charger la clé publique du serveur
+with open("server_public_key.pem", "rb") as f:
+    server_public_key = RSA.import_key(f.read())
 
-def aes_decrypt(cipher_text, key):
-    """Déchiffre un texte chiffré en utilisant AES"""
-    iv = base64.b64decode(cipher_text[:24])
-    ct = base64.b64decode(cipher_text[24:])
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    pt = unpad(cipher.decrypt(ct), AES.block_size)
-    return pt.decode('utf-8')
+def rsa_encrypt(plain_text, public_key):
+    """Chiffre un texte en clair en utilisant RSA"""
+    cipher_rsa = PKCS1_OAEP.new(public_key)
+    encrypted_message = cipher_rsa.encrypt(plain_text.encode('utf-8'))
+    return base64.b64encode(encrypted_message).decode('utf-8')
+
+def rsa_decrypt(cipher_text, private_key):
+    """Déchiffre un texte chiffré en utilisant RSA"""
+    cipher_rsa = PKCS1_OAEP.new(private_key)
+    decrypted_message = cipher_rsa.decrypt(base64.b64decode(cipher_text))
+    return decrypted_message.decode('utf-8')
 
 def receive_messages():
     global waiting_for_login
@@ -32,9 +31,8 @@ def receive_messages():
         try:
             message = client_socket.recv(1024).decode("utf-8")
             if message:
-                decrypted_message = aes_decrypt(message, ENCRYPTION_KEY)
+                decrypted_message = rsa_decrypt(message, client_private_key)
 
-                # Si le serveur demande login ou register, on attend une réponse utilisateur
                 if "login" in decrypted_message.lower() or "register" in decrypted_message.lower():
                     display_message(f"[SERVEUR] {decrypted_message}")
                     waiting_for_login = True
@@ -61,11 +59,9 @@ def send_message(event=None):
     message = message_entry.get()
     
     if message:
-        if waiting_for_login:  # Si on attend une réponse de connexion/enregistrement
-            client_socket.send(aes_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
-            waiting_for_login = False  # On repasse en mode chat normal
-        else:
-            client_socket.send(aes_encrypt(message, ENCRYPTION_KEY).encode("utf-8"))
+        encrypted_message = rsa_encrypt(message, server_public_key)
+        client_socket.send(encrypted_message.encode("utf-8"))
+        if not waiting_for_login:
             display_message(f"Moi: {message}")
 
         message_entry.delete(0, tk.END)
@@ -77,24 +73,31 @@ def display_message(message):
     chat_display.yview(tk.END)
 
 def start_client():
-    global client_socket, waiting_for_login
+    global client_socket, waiting_for_login, client_private_key
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((SERVER_IP, SERVER_PORT))
     
-    waiting_for_login = False  # On commence en mode chat normal
+    # Générer une paire de clés RSA pour le client
+    client_key = RSA.generate(2048)
+    client_private_key = client_key
+    client_public_key = client_key.publickey().export_key()
+
+    # Envoyer la clé publique du client au serveur
+    client_socket.send(client_public_key)
+    
+    waiting_for_login = False
     threading.Thread(target=receive_messages, daemon=True).start()
 
 def logout():
     messagebox.showinfo("Déconnexion", "Vous êtes déconnecté. Fermeture dans 2 secondes...")
     
     try:
-        client_socket.send(aes_encrypt("/logout", ENCRYPTION_KEY).encode("utf-8"))
+        encrypted_message = rsa_encrypt("/logout", server_public_key)
+        client_socket.send(encrypted_message.encode("utf-8"))
         client_socket.close()
         root.after(2000, root.destroy)
     except:
-        pass  # Si la connexion est déjà fermée, on ignore l'erreur
-
-
+        pass
 
 def main():
     global root, chat_display, message_entry
